@@ -1,67 +1,83 @@
-name: Build pcsc-lite for MiSTer
+name: build-pcsc-lite
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout build repo
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Checkout pcsc-lite
-      uses: actions/checkout@v4
-      with:
-        repository: LudovicRousseau/PCSC
-        path: pcsc-lite
-        ref: master   
+      - name: Enable armhf architecture
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo sed -i '/security.ubuntu.com/d' /etc/apt/sources.list
+          echo "deb http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse" | sudo tee /etc/apt/sources.list.d/ports.list
+          echo "deb http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse" | sudo tee -a /etc/apt/sources.list.d/ports.list
+          echo "deb http://ports.ubuntu.com/ubuntu-ports jammy-security main universe multiverse" | sudo tee -a /etc/apt/sources.list.d/ports.list
+          sudo apt update
 
-    - name: Configure APT for armhf
-      run: |
-        sudo sed -i 's|^deb http://archive.ubuntu.com/ubuntu|deb [arch=amd64] http://archive.ubuntu.com/ubuntu|' /etc/apt/sources.list
-        sudo sed -i 's|^deb http://security.ubuntu.com/ubuntu|deb [arch=amd64] http://security.ubuntu.com/ubuntu|' /etc/apt/sources.list
+      - name: Install build dependencies
+        run: |
+          sudo apt install -y \
+            gcc-arm-linux-gnueabihf \
+            g++-arm-linux-gnueabihf \
+            pkg-config \
+            meson \
+            ninja-build \
+            libusb-1.0-0-dev:armhf \
+            libudev-dev:armhf \
+            libsystemd-dev:armhf \
+            libssl-dev:armhf
 
-        sudo tee /etc/apt/sources.list.d/armhf.list > /dev/null << 'EOF'
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-        EOF
+      - name: Clone pcsc-lite
+        run: |
+          git clone https://github.com/LudovicRousseau/PCSC.git pcsc-lite
 
-        sudo dpkg --add-architecture armhf
-        sudo apt update
+      - name: Configure build
+        run: |
+          cat > meson_cross.txt <<EOF
+          [binaries]
+          c = 'arm-linux-gnueabihf-gcc'
+          cpp = 'arm-linux-gnueabihf-g++'
+          ar = 'arm-linux-gnueabihf-ar'
+          strip = 'arm-linux-gnueabihf-strip'
+          pkgconfig = 'pkg-config'
 
-    - name: Install build dependencies
-      run: |
-        sudo apt install -y \
-          meson \
-          ninja-build \
-          pkg-config \
-          gcc-arm-linux-gnueabihf \
-          g++-arm-linux-gnueabihf \
-          libusb-1.0-0-dev:armhf \
-          libudev-dev:armhf
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'arm'
+          cpu = 'armv7'
+          endian = 'little'
+          EOF
 
-    - name: Build pcsc-lite
-      run: |
-        chmod +x build.sh
-        ./build.sh
+          meson setup build pcsc-lite \
+            --cross-file meson_cross.txt \
+            --prefix=/usr \
+            -Dlibusb=true \
+            -Dudev=true \
+            -Dsystemd=false \
+            -Dpolkit=false \
+            -Dserial=false \
+            -Dusb=true
 
-    - name: Package artifact
-      run: |
-        tar -C output -czf pcsc-lite-mister.tar.gz .
+      - name: Compile
+        run: |
+          ninja -C build
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: pcsc-lite-mister
-        path: pcsc-lite-mister.tar.gz
+      - name: Package binary
+        run: |
+          mkdir -p out
+          cp build/src/pcscd out/
+          arm-linux-gnueabihf-strip out/pcscd
+          tar czf pcsc-lite-mister-armhf.tar.gz -C out pcscd
 
-    - name: Create GitHub Release
-      if: github.ref == 'refs/heads/main'
-      uses: softprops/action-gh-release@v2
-      with:
-        files: pcsc-lite-mister.tar.gz
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcsc-lite-mister-armhf
+          path: pcsc-lite-mister-armhf.tar.gz
