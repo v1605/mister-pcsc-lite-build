@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup armhf build environment
+      - name: Configure apt for cross build
         run: |
           sudo dpkg --add-architecture armhf
           sudo rm -f /etc/apt/sources.list.d/*.list
@@ -35,17 +35,15 @@ EOF
             pkg-config \
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
+            libc6-dev:armhf \
             libusb-1.0-0-dev:armhf \
             libudev-dev:armhf \
             libsystemd-dev:armhf \
-            libcap-dev:armhf \
-            libc6-dev:armhf
+            libcap-dev:armhf
 
       - name: Clone pcsc-lite
         run: |
           git clone https://salsa.debian.org/pcsc/pcsc-lite.git
-          cd pcsc-lite
-          git checkout master
 
       - name: Create Meson cross file
         run: |
@@ -81,12 +79,12 @@ EOF
           cd pcsc-lite
           meson compile -C build
 
-      - name: Install to staging
+      - name: Install to staging directory
         run: |
           cd pcsc-lite
           DESTDIR=$PWD/stage meson install -C build
 
-      - name: Package artifacts
+      - name: Package output
         run: |
           tar czf pcsc-lite-armhf.tar.gz -C pcsc-lite/stage .
 
