@@ -22,12 +22,15 @@ jobs:
 
     - name: Install build dependencies
       run: |
+        sudo dpkg --add-architecture armhf
         sudo apt update
+
         sudo apt install -y \
           meson ninja-build pkg-config \
           gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
           libusb-1.0-0-dev:armhf \
           libudev-dev:armhf
+
 
     - name: Build pcsc-lite
       run: |
