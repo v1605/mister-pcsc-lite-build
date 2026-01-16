@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure apt for cross build
+      - name: Configure apt
         run: |
           sudo dpkg --add-architecture armhf
           sudo rm -f /etc/apt/sources.list.d/*.list
@@ -27,7 +27,7 @@ deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main univers
 EOF
           sudo apt update
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           sudo apt install -y \
             meson \
@@ -42,10 +42,9 @@ EOF
             libcap-dev:armhf
 
       - name: Clone pcsc-lite
-        run: |
-          git clone https://salsa.debian.org/pcsc/pcsc-lite.git
+        run: git clone https://salsa.debian.org/pcsc/pcsc-lite.git
 
-      - name: Create Meson cross file
+      - name: Create cross file
         run: |
           cat > pcsc-lite/meson-cross.txt <<EOF
 [binaries]
@@ -62,7 +61,7 @@ cpu = 'armv7'
 endian = 'little'
 EOF
 
-      - name: Configure pcsc-lite
+      - name: Configure
         run: |
           cd pcsc-lite
           meson setup build \
@@ -74,17 +73,17 @@ EOF
             -Dsystemd=true \
             -Dpolkit=false
 
-      - name: Build pcsc-lite
+      - name: Build
         run: |
           cd pcsc-lite
           meson compile -C build
 
-      - name: Install to staging directory
+      - name: Install
         run: |
           cd pcsc-lite
           DESTDIR=$PWD/stage meson install -C build
 
-      - name: Package output
+      - name: Package
         run: |
           tar czf pcsc-lite-armhf.tar.gz -C pcsc-lite/stage .
 
