@@ -16,20 +16,19 @@ jobs:
       - name: Configure apt
         run: |
           sudo dpkg --add-architecture armhf
-          # Clear existing sources and add multi-arch compatible sources
           sudo rm -f /etc/apt/sources.list.d/*.list
+          sudo sed -i '/security.ubuntu.com/d' /etc/apt/sources.list
           sudo tee /etc/apt/sources.list <<EOF
-deb [arch=amd64] http://archive.ubuntu.com jammy main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com jammy-updates main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com jammy-backports main universe multiverse
-deb [arch=armhf] http://ports.ubuntu.com jammy main universe multiverse
-deb [arch=armhf] http://ports.ubuntu.com jammy-updates main universe multiverse
-EOF
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse
+          EOF
           sudo apt update
 
       - name: Install dependencies
         run: |
-          # Install core build tools for host and cross-compilers/libraries for target (armhf)
           sudo apt install -y \
             meson \
             ninja-build \
@@ -43,26 +42,27 @@ EOF
             libcap-dev:armhf
 
       - name: Clone pcsc-lite
-        run: git clone https://salsa.debian.org/pcsc/pcsc-lite.git
+        run: |
+          git clone https://salsa.debian.org/pcsc/pcsc-lite.git
 
-      - name: Create cross file
+      - name: Create Meson cross file
         run: |
           cat > pcsc-lite/meson-cross.txt <<EOF
-[binaries]
-c = 'arm-linux-gnueabihf-gcc'
-cpp = 'arm-linux-gnueabihf-g++'
-ar = 'arm-linux-gnueabihf-ar'
-strip = 'arm-linux-gnueabihf-strip'
-pkgconfig = 'pkg-config'
+          [binaries]
+          c = 'arm-linux-gnueabihf-gcc'
+          cpp = 'arm-linux-gnueabihf-g++'
+          ar = 'arm-linux-gnueabihf-ar'
+          strip = 'arm-linux-gnueabihf-strip'
+          pkgconfig = 'pkg-config'
 
-[host_machine]
-system = 'linux'
-cpu_family = 'arm'
-cpu = 'armv7'
-endian = 'little'
-EOF
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'arm'
+          cpu = 'armv7'
+          endian = 'little'
+          EOF
 
-      - name: Configure
+      - name: Configure pcsc-lite
         run: |
           cd pcsc-lite
           meson setup build \
@@ -74,17 +74,17 @@ EOF
             -Dsystemd=true \
             -Dpolkit=false
 
-      - name: Build
+      - name: Build pcsc-lite
         run: |
           cd pcsc-lite
           meson compile -C build
 
-      - name: Install
+      - name: Install pcsc-lite
         run: |
           cd pcsc-lite
           DESTDIR=$PWD/stage meson install -C build
 
-      - name: Package
+      - name: Package artifacts
         run: |
           tar czf pcsc-lite-armhf.tar.gz -C pcsc-lite/stage .
 
