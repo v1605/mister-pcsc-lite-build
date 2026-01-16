@@ -16,19 +16,20 @@ jobs:
       - name: Configure apt
         run: |
           sudo dpkg --add-architecture armhf
+          # Clear existing sources and add multi-arch compatible sources
           sudo rm -f /etc/apt/sources.list.d/*.list
-          sudo sed -i '/security.ubuntu.com/d' /etc/apt/sources.list
           sudo tee /etc/apt/sources.list <<EOF
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main universe multiverse
-deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse
-deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com jammy main universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com jammy-updates main universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com jammy-backports main universe multiverse
+deb [arch=armhf] http://ports.ubuntu.com jammy main universe multiverse
+deb [arch=armhf] http://ports.ubuntu.com jammy-updates main universe multiverse
 EOF
           sudo apt update
 
       - name: Install dependencies
         run: |
+          # Install core build tools for host and cross-compilers/libraries for target (armhf)
           sudo apt install -y \
             meson \
             ninja-build \
