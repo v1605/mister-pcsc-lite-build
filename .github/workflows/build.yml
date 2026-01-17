@@ -1,4 +1,4 @@
-name: Build pcscd for MiSTer (upstream tracked)
+name: Build pcscd for MiSTer
 
 on:
   workflow_dispatch:
@@ -10,10 +10,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y \
@@ -83,9 +82,9 @@ jobs:
 
       - name: Configure
         run: |
-          cd pcsc-lite
+          cd pcsc-lite/pcsc-lite
           meson setup build \
-            --cross-file meson-cross.txt \
+            --cross-file ../meson-cross.txt \
             --prefix=/usr \
             -Dlibsystemd=false \
             -Dlibudev=false \
@@ -97,18 +96,18 @@ jobs:
 
       - name: Build
         run: |
-          cd pcsc-lite
+          cd pcsc-lite/pcsc-lite
           ninja -C build
 
       - name: Install to staging
         run: |
-          cd pcsc-lite
-          DESTDIR=$PWD/stage ninja -C build install
+          cd pcsc-lite/pcsc-lite
+          DESTDIR=$PWD/../../stage ninja -C build install
 
       - name: Extract pcscd
         run: |
           mkdir -p release
-          cp pcsc-lite/stage/usr/bin/pcscd release/
+          cp stage/usr/bin/pcscd release/
           arm-linux-gnueabihf-strip release/pcscd
 
       - name: Create GitHub Release
