@@ -1,4 +1,4 @@
-name: build-pcsc-lite-armhf
+name: build-pcsc-lite-mister
 
 on:
   push:
@@ -13,33 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure apt
+      - name: Install host build tools
         run: |
-          sudo dpkg --add-architecture armhf
-          sudo rm -f /etc/apt/sources.list.d/*.list
-          sudo sed -i '/security.ubuntu.com/d' /etc/apt/sources.list
-          sudo tee /etc/apt/sources.list <<EOF
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main universe multiverse
-          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe multiverse
-          EOF
           sudo apt update
-
-      - name: Install dependencies
-        run: |
           sudo apt install -y \
+            git \
             meson \
             ninja-build \
             pkg-config \
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
-            libc6-dev:armhf \
-            libusb-1.0-0-dev:armhf \
-            libudev-dev:armhf \
-            libsystemd-dev:armhf \
-            libcap-dev:armhf
+            libc6-dev-armhf-cross
 
       - name: Clone pcsc-lite
         run: |
@@ -48,7 +32,7 @@ jobs:
       - name: Create Meson cross file
         run: |
           mkdir -p pcsc-lite
-          cat > pcsc-lite/meson-cross.txt <<EOF
+          cat > pcsc-lite/meson-cross.txt << 'EOF'
           [binaries]
           c = 'arm-linux-gnueabihf-gcc'
           cpp = 'arm-linux-gnueabihf-g++'
@@ -61,38 +45,35 @@ jobs:
           cpu_family = 'arm'
           cpu = 'armv7'
           endian = 'little'
+
+          [properties]
+          needs_exe_wrapper = true
           EOF
 
-      - name: Configure pcsc-lite
+      - name: Configure pcsc-lite (MiSTer)
         run: |
-          cd pcsc-lite
           meson setup pcsc-lite/build pcsc-lite \
-          --prefix=/usr \
-          --buildtype=release \
-          -Dembedded=true \
-          -Dlibsystemd=false \
-          -Dlibudev=false \
-          -Dlibusb=true \
-          -Dpolkit=false \
-          -Dusb=true \
-          -Dserial=false
+            --cross-file pcsc-lite/meson-cross.txt \
+            --prefix=/usr \
+            --buildtype=release \
+            -Dembedded=true \
+            -Dlibsystemd=false \
+            -Dpolkit=false \
+            -Dlibudev=true \
+            -Dlibusb=true \
+            -Dusb=true \
+            -Dserial=false
 
-
-      - name: Build pcsc-lite
+      - name: Build
         run: |
-          cd pcsc-lite
-          meson compile -C build
+          meson compile -C pcsc-lite/build
 
-      - name: Install pcsc-lite
+      - name: Install to staging
         run: |
-          cd pcsc-lite
-          DESTDIR=$PWD/stage meson install -C build
+          DESTDIR=$PWD/mister-root meson install -C pcsc-lite/build
 
-      - name: Package artifacts
-        run: |
-          tar czf pcsc-lite-armhf.tar.gz -C pcsc-lite/stage .
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload MiSTer artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: pcsc-lite-armhf
-          path: pcsc-lite-armhf.tar.gz
+          name: pcsc-lite-mister
+          path: mister-root
