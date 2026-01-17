@@ -60,6 +60,14 @@ jobs:
           git clone --branch ${{ steps.upstream.outputs.version }} \
             https://github.com/LudovicRousseau/PCSC.git pcsc-lite
 
+      - name: Debug tree after clone
+        run: |
+          echo "=== repo root ==="
+          ls -la
+          echo
+          echo "=== pcsc-lite tree (depth 3) ==="
+          find pcsc-lite -maxdepth 3 -type f -name meson.build -o -type d | sort
+
       - name: Create Meson cross file
         run: |
           cat > pcsc-lite/meson-cross.txt <<'EOF'
