@@ -47,6 +47,7 @@ jobs:
 
       - name: Create Meson cross file
         run: |
+          mkdir -p pcsc-lite
           cat > pcsc-lite/meson-cross.txt <<EOF
           [binaries]
           c = 'arm-linux-gnueabihf-gcc'
