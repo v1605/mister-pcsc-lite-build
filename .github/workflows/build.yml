@@ -1,9 +1,7 @@
-name: build-pcsc-lite-mister
+name: Build pcsc-lite for MiSTer
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -11,19 +9,20 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Install host build tools
+      - name: Install build dependencies
         run: |
           sudo apt update
           sudo apt install -y \
-            git \
+            build-essential \
             meson \
             ninja-build \
             pkg-config \
             gcc-arm-linux-gnueabihf \
-            g++-arm-linux-gnueabihf \
-            libc6-dev-armhf-cross
+            libc6-dev-armhf-cross \
+            git
 
       - name: Clone pcsc-lite
         run: |
@@ -31,8 +30,7 @@ jobs:
 
       - name: Create Meson cross file
         run: |
-          mkdir -p pcsc-lite
-          cat > pcsc-lite/meson-cross.txt << 'EOF'
+          cat > pcsc-lite/meson-cross.txt <<'EOF'
           [binaries]
           c = 'arm-linux-gnueabihf-gcc'
           cpp = 'arm-linux-gnueabihf-g++'
@@ -50,30 +48,32 @@ jobs:
           needs_exe_wrapper = true
           EOF
 
-      - name: Configure pcsc-lite (MiSTer)
+      - name: Configure pcsc-lite
         run: |
-          meson setup pcsc-lite/build pcsc-lite \
-            --cross-file pcsc-lite/meson-cross.txt \
+          cd pcsc-lite
+          meson setup build \
+            --cross-file meson-cross.txt \
             --prefix=/usr \
-            --buildtype=release \
-            -Dembedded=true \
             -Dlibsystemd=false \
-            -Dpolkit=false \
             -Dlibudev=true \
-            -Dlibusb=true \
+            -Dlibusb=false \
+            -Dpolkit=false \
             -Dusb=true \
-            -Dserial=false
+            -Dserial=false \
+            -Dembedded=true
 
-      - name: Build
+      - name: Build pcsc-lite
         run: |
-          meson compile -C pcsc-lite/build
+          cd pcsc-lite
+          ninja -C build
 
-      - name: Install to staging
+      - name: Install to staging directory
         run: |
-          DESTDIR=$PWD/mister-root meson install -C pcsc-lite/build
+          cd pcsc-lite
+          DESTDIR=$PWD/stage ninja -C build install
 
-      - name: Upload MiSTer artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pcsc-lite-mister
-          path: mister-root
+          path: pcsc-lite/stage
