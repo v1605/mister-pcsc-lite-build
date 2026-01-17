@@ -1,0 +1,111 @@
+name: Build pcsc-lite for MiSTer
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: 
+      image: ubuntu:20.04 
+      options: --user root
+
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y \
+            build-essential \
+            meson \
+            ninja-build \
+            pkg-config \
+            gcc-arm-linux-gnueabihf \
+            libc6-dev-armhf-cross \
+            git \
+            python3-pip \
+            flex
+            apt purge meson ninja-build -y
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          TZ: "Etc/UTC" 
+          
+      - name: Upgrade Meson and Ninja
+        run: |
+          pip3 install meson ninja --upgrade
+          meson --version 
+
+      - name: Clone pcsc-lite latest release
+        id: pcsc
+        run: |
+          git clone https://github.com/LudovicRousseau/PCSC.git pcsc-lite
+          cd pcsc-lite
+          git fetch --tags
+          TAG=$(git tag | grep -v '^pcsc-' | sort -Vr | head -n 1)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          git checkout "$TAG"
+
+      - name: Create Meson cross file
+        run: |
+          cat > pcsc-lite/meson-cross.txt <<'EOF'
+          [binaries]
+          c = 'arm-linux-gnueabihf-gcc'
+          cpp = 'arm-linux-gnueabihf-g++'
+          ar = 'arm-linux-gnueabihf-ar'
+          strip = 'arm-linux-gnueabihf-strip'
+          pkgconfig = 'pkg-config'
+
+          [host_machine]
+          system = 'linux'
+          cpu_family = 'arm'
+          cpu = 'armv7'
+          endian = 'little'
+
+          [properties]
+          needs_exe_wrapper = true
+          EOF
+
+      - name: Configure
+        run: |
+          cd pcsc-lite
+          meson setup build \
+            --cross-file meson-cross.txt \
+            --prefix=/usr \
+            -Dlibsystemd=false \
+            -Dlibudev=false \
+            -Dlibusb=false \
+            -Dpolkit=false \
+            -Dusb=true \
+            -Dserial=false \
+            -Dembedded=true
+
+      - name: Build
+        run: |
+          cd pcsc-lite
+          ninja -C build
+
+      - name: Stage install
+        run: |
+          cd pcsc-lite
+          DESTDIR=$PWD/stage ninja -C build install
+
+      - name: Extract pcscd
+        run: |
+          mkdir -p out
+          cp pcsc-lite/stage/usr/sbin/pcscd out/pcscd
+          arm-linux-gnueabihf-strip out/pcscd
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.pcsc.outputs.tag }}
+          name: pcsc-lite ${{ steps.pcsc.outputs.tag }} (MiSTer)
+          files: out/pcscd
