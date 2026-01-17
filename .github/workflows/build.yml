@@ -55,7 +55,7 @@ jobs:
             --cross-file meson-cross.txt \
             --prefix=/usr \
             -Dlibsystemd=false \
-            -Dlibudev=true \
+            -Dlibudev=false \
             -Dlibusb=false \
             -Dpolkit=false \
             -Dusb=true \
