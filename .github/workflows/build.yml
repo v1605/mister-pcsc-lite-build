@@ -66,14 +66,17 @@ jobs:
       - name: Configure pcsc-lite
         run: |
           cd pcsc-lite
-          meson setup build \
-            --cross-file meson-cross.txt \
-            --prefix=/usr \
-            --libdir=lib \
-            -Dlibusb=true \
-            -Dlibudev=true \
-            -Dsystemd=true \
-            -Dpolkit=false
+          meson setup pcsc-lite/build pcsc-lite \
+          --prefix=/usr \
+          --buildtype=release \
+          -Dembedded=true \
+          -Dlibsystemd=false \
+          -Dlibudev=false \
+          -Dlibusb=true \
+          -Dpolkit=false \
+          -Dusb=true \
+          -Dserial=false
+
 
       - name: Build pcsc-lite
         run: |
