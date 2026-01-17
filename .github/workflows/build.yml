@@ -1,32 +1,65 @@
-name: Build pcsc-lite for MiSTer
+name: Build pcscd for MiSTer (upstream tracked)
 
 on:
-  push:
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install build tools
         run: |
           sudo apt update
           sudo apt install -y \
-            build-essential \
+            git \
             meson \
             ninja-build \
             pkg-config \
             gcc-arm-linux-gnueabihf \
-            libc6-dev-armhf-cross \
-            git
+            libc6-dev-armhf-cross
+
+      - name: Get latest upstream tag
+        id: upstream
+        run: |
+          git ls-remote --tags https://github.com/LudovicRousseau/PCSC.git \
+            | awk '{print $2}' \
+            | sed 's|refs/tags/||' \
+            | grep -v '\^{}' \
+            | sort -V \
+            | tail -n1 > version.txt
+          echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.upstream.outputs.version }}'
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              })
+              return 'exists'
+            } catch {
+              return 'missing'
+            }
+
+      - name: Stop if already released
+        if: steps.release.outputs.result == 'exists'
+        run: exit 0
 
       - name: Clone pcsc-lite
         run: |
-          git clone https://github.com/LudovicRousseau/PCSC.git pcsc-lite
+          git clone --branch ${{ steps.upstream.outputs.version }} \
+            https://github.com/LudovicRousseau/PCSC.git pcsc-lite
 
       - name: Create Meson cross file
         run: |
@@ -48,7 +81,7 @@ jobs:
           needs_exe_wrapper = true
           EOF
 
-      - name: Configure pcsc-lite
+      - name: Configure
         run: |
           cd pcsc-lite
           meson setup build \
@@ -62,18 +95,27 @@ jobs:
             -Dserial=false \
             -Dembedded=true
 
-      - name: Build pcsc-lite
+      - name: Build
         run: |
           cd pcsc-lite
           ninja -C build
 
-      - name: Install to staging directory
+      - name: Install to staging
         run: |
           cd pcsc-lite
           DESTDIR=$PWD/stage ninja -C build install
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Extract pcscd
+        run: |
+          mkdir -p release
+          cp pcsc-lite/stage/usr/bin/pcscd release/
+          arm-linux-gnueabihf-strip release/pcscd
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: pcsc-lite-mister
-          path: pcsc-lite/stage
+          tag_name: ${{ steps.upstream.outputs.version }}
+          name: pcsc-lite ${{ steps.upstream.outputs.version }} (MiSTer)
+          files: release/pcscd
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
