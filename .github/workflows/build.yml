@@ -43,7 +43,7 @@ jobs:
 
       - name: Clone pcsc-lite
         run: |
-          git clone https://github.com/LudovicRousseau/PCSC.git
+          git clone https://github.com/LudovicRousseau/PCSC.git pcsc-lite
 
       - name: Create Meson cross file
         run: |
